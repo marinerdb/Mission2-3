@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>따라 그리기 연습장</title>
+<style>
+  :root {
+    --cream: #f6eddb;
+    --paper: #fffdf8;
+    --ink: #4b3a2a;
+    --ink-soft: #7a6650;
+    --line: #d9c7a6;
+    --accent: #c9604a;
+    --accent-dark: #a94a36;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at 20% 10%, rgba(255,255,255,.55), transparent 45%),
+      radial-gradient(circle at 85% 90%, rgba(201,96,74,.08), transparent 40%),
+      var(--cream);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  .app { max-width: 1080px; margin: 0 auto; padding: 22px 16px 56px; }
+  .head { text-align: center; margin-bottom: 18px; }
+  .head h1 { margin: 0; font-size: clamp(26px, 5.5vw, 40px); letter-spacing: -0.5px; }
+  .head h1::after {
+    content: ""; display: block; width: 120px; height: 6px; margin: 8px auto 0;
+    border-radius: 3px; background: repeating-linear-gradient(90deg, var(--accent) 0 10px, transparent 10px 16px);
+    opacity: .7;
+  }
+  .lead { margin: 10px 0 0; color: var(--ink-soft); font-size: 15px; }
+
+  .board { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; }
+  @media (min-width: 760px) {
+    .board { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  }
+  .col { min-width: 0; }
+
+  .frame {
+    margin: 0; background: var(--paper); padding: 14px 14px 12px; border-radius: 6px;
+    border: 1px solid #eadfc8; box-shadow: 0 8px 20px rgba(75, 58, 42, .16);
+  }
+  .frame .label { font-weight: 700; margin: 0 0 8px; font-size: 16px; }
+  .square {
+    position: relative; width: 100%; aspect-ratio: 1 / 1; background: #fff;
+    border: 1px solid #e5dccb; overflow: hidden;
+  }
+  .square canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #drawCanvas { touch-action: none; cursor: crosshair; -webkit-touch-callout: none; user-select: none; }
+
+  .empty {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 14px; padding: 16px; text-align: center;
+    background: rgba(255, 253, 248, .94); border: 3px dashed var(--line); margin: 8px;
+    color: var(--ink-soft);
+  }
+  .empty p { margin: 0; font-size: 15px; }
+  .frame.drag .square { outline: 4px solid var(--accent); outline-offset: -4px; }
+  .frame.drag .empty { background: rgba(255, 236, 226, .96); }
+
+  button, .btn {
+    font: inherit; color: var(--ink); background: #fff; border: 1.5px solid #cdb98f;
+    border-radius: 999px; padding: 8px 16px; cursor: pointer; min-height: 40px;
+  }
+  button:hover:not(:disabled) { background: #fbf3e2; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, .swatch:focus-visible { outline: 3px solid #4d8fe8; outline-offset: 2px; }
+  button.primary { background: var(--accent); border-color: var(--accent-dark); color: #fff; font-weight: 700; }
+  button.primary:hover:not(:disabled) { background: var(--accent-dark); }
+  button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  .src-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; min-height: 40px; }
+  .file-info { color: var(--ink-soft); font-size: 14px; overflow-wrap: anywhere; min-width: 0; }
+
+  .card {
+    margin-top: 14px; background: var(--paper); border: 1px solid #eadfc8; border-radius: 10px;
+    padding: 14px; box-shadow: 0 4px 12px rgba(75, 58, 42, .1);
+  }
+  .group { margin-bottom: 14px; }
+  .group:last-child { margin-bottom: 0; }
+  .group-title { font-size: 13px; font-weight: 700; color: var(--ink-soft); margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; }
+  .tool-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .custom-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .swatch {
+    width: 32px; height: 32px; border-radius: 50%; padding: 0; min-height: 0;
+    border: 2px solid rgba(0,0,0,.18);
+  }
+  .swatch[aria-pressed="true"] { outline: 3px solid var(--ink); outline-offset: 2px; border-color: #fff; }
+  .custom { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+  .custom input { width: 38px; height: 32px; padding: 0; border: 1px solid #cdb98f; border-radius: 6px; background: #fff; cursor: pointer; }
+  .preview {
+    width: 40px; height: 40px; border-radius: 8px; border: 1px solid #e5dccb; background: #fff;
+    display: inline-grid; place-items: center; flex: none;
+  }
+  .preview i { display: block; border-radius: 50%; }
+
+  input[type="range"] { width: 100%; accent-color: var(--accent); margin: 4px 0; }
+
+  .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 700; }
+  .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .switch .track {
+    width: 46px; height: 26px; border-radius: 13px; background: #d6cbb6; position: relative; transition: background .15s; flex: none;
+  }
+  .switch .track::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .15s;
+  }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(20px); }
+  .switch input:focus-visible + .track { outline: 3px solid #4d8fe8; outline-offset: 2px; }
+
+  .savebar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 26px; }
+  .savebar .field { flex: 1 1 240px; min-width: 0; }
+  .savebar label { display: block; font-size: 13px; font-weight: 700; color: var(--ink-soft); margin-bottom: 4px; }
+  .savebar input[type="text"] {
+    width: 100%; font: inherit; padding: 9px 12px; border: 1.5px solid #cdb98f; border-radius: 10px; background: #fff; color: var(--ink); min-height: 44px;
+  }
+  .savebar button.primary { min-height: 44px; padding: 8px 26px; }
+  .credit { margin: 16px 0 0; font-size: 13px; color: var(--ink-soft); text-align: center; }
+
+  .status {
+    position: fixed; left: 50%; bottom: 18px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+    max-width: calc(100vw - 32px); padding: 11px 18px; border-radius: 12px; background: var(--ink); color: #fff;
+    font-size: 15px; box-shadow: 0 6px 18px rgba(0,0,0,.28); transition: opacity .2s, transform .2s; z-index: 30;
+    overflow-wrap: anywhere; text-align: center;
+  }
+  .status.show { opacity: 1; transform: translate(-50%, 0); }
+  .status.error { background: #a63a2a; }
+
+  .modal {
+    position: fixed; inset: 0; background: rgba(50, 36, 22, .5); display: flex; align-items: center; justify-content: center;
+    padding: 16px; z-index: 40;
+  }
+  .modal-box { background: var(--paper); border-radius: 14px; padding: 22px 20px 18px; max-width: 380px; width: 100%; box-shadow: 0 14px 40px rgba(0,0,0,.35); }
+  .modal-box p { margin: 0 0 18px; font-size: 16px; font-weight: 700; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="head">
+    <h1>따라 그리기 연습장</h1>
+    <p class="lead">따라 그릴 이미지를 불러와 오른쪽 칸에 그려 보세요.</p>
+  </header>
+
+  <section class="board">
+    <div class="col">
+      <figure class="frame" id="srcFrame">
+        <figcaption class="label">원본</figcaption>
+        <div class="square" id="srcSquare">
+          <canvas id="srcCanvas" width="1000" height="1000" role="img" aria-label="불러온 원본 이미지"></canvas>
+          <div class="empty" id="srcEmpty">
+            <p>여기로 이미지를 끌어다 놓으세요</p>
+            <button type="button" class="primary" id="pickBtn">이미지 선택</button>
+            <p>JPG, PNG 파일을 불러올 수 있어요.</p>
+          </div>
+        </div>
+      </figure>
+      <div class="src-row">
+        <button type="button" id="changeBtn" hidden>다른 이미지 선택</button>
+        <span class="file-info" id="fileInfo"></span>
+      </div>
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,.png,.jpg,.jpeg" hidden>
+    </div>
+
+    <div class="col">
+      <figure class="frame">
+        <figcaption class="label">내 그림</figcaption>
+        <div class="square" id="drawSquare">
+          <canvas id="guideCanvas" width="1000" height="1000" aria-hidden="true"></canvas>
+          <canvas id="drawCanvas" width="1000" height="1000" role="img" aria-label="내 그림을 그리는 그림판"></canvas>
+        </div>
+      </figure>
+
+      <div class="card" aria-label="그림판 도구">
+        <div class="group">
+          <div class="tool-row">
+            <button type="button" id="penBtn" aria-pressed="true">펜</button>
+            <button type="button" id="eraserBtn" aria-pressed="false">지우개</button>
+            <button type="button" id="undoBtn" disabled>되돌리기</button>
+          </div>
+        </div>
+        <div class="group">
+          <div class="group-title"><span>색상</span></div>
+          <div class="swatches" id="swatches" role="group" aria-label="기본 팔레트"></div>
+          <div class="custom-row">
+            <span class="preview" id="preview" aria-hidden="true" title="지금 펜 모양"><i id="previewDot"></i></span>
+            <label class="custom">직접 고르기 <input type="color" id="colorInput" value="#000000"></label>
+          </div>
+        </div>
+        <div class="group">
+          <div class="group-title"><label for="sizeRange">굵기</label><span id="sizeVal">4</span></div>
+          <input type="range" id="sizeRange" min="1" max="30" step="1" value="4">
+        </div>
+        <div class="group">
+          <div class="group-title" style="align-items:center">
+            <label class="switch"><input type="checkbox" id="guideOn" role="switch" checked><span class="track"></span><span>흐린 가이드</span></label>
+            <span id="guideVal">농도 30%</span>
+          </div>
+          <input type="range" id="guideRange" min="5" max="100" step="1" value="30" aria-label="흐린 가이드 농도">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="savebar">
+    <div class="field">
+      <label for="titleInput">제목</label>
+      <input type="text" id="titleInput" maxlength="60" placeholder="나의 따라 그리기" autocomplete="off">
+    </div>
+    <button type="button" class="primary" id="saveBtn">이미지로 저장</button>
+  </section>
+  <p class="credit">다른 사람의 작품을 따라 그린 그림을 SNS에 올릴 때는 원작자를 직접 밝혀 주세요.</p>
+</main>
+
+<div class="status" id="status" role="status" aria-live="polite"></div>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalMsg">
+  <div class="modal-box">
+    <p id="modalMsg">지금 그린 그림이 사라집니다. 새 이미지를 불러올까요?</p>
+    <div class="modal-actions">
+      <button type="button" id="modalCancel">취소</button>
+      <button type="button" class="primary" id="modalOk">불러오기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const SIZE = 1000;          // 그림판 내부 해상도(정사각형)
+  const MAX_UNDO = 20;        // 되돌리기 가능 획 수
+  const MAX_SRC = 1600;       // 큰 사진을 줄여서 보관하는 긴 변 길이
+  const APP_NAME = '따라 그리기 연습장';
+  const DEFAULT_TITLE = '나의 따라 그리기';
+  const DEFAULT_COLOR = '#000000';
+  const DEFAULT_SIZE = 4;
+  const FONT_STACK = '"Nanum Pen Script","Segoe Print","Bradley Hand","Marker Felt","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
+  const PALETTE = [
+    ['검정', '#000000'], ['진회색', '#555555'], ['빨강', '#e03131'], ['주황', '#f76707'],
+    ['노랑', '#fcc419'], ['연두', '#94d82d'], ['초록', '#2f9e44'], ['하늘', '#4dabf7'],
+    ['파랑', '#1c63d6'], ['보라', '#7048e8'], ['분홍', '#f783ac'], ['갈색', '#8d5524']
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const srcCanvas = $('srcCanvas'), guideCanvas = $('guideCanvas'), drawCanvas = $('drawCanvas');
+  const srcCtx = srcCanvas.getContext('2d');
+  const guideCtx = guideCanvas.getContext('2d');
+  const drawCtx = drawCanvas.getContext('2d');
+  const baseCanvas = document.createElement('canvas');
+  baseCanvas.width = baseCanvas.height = SIZE;
+  const baseCtx = baseCanvas.getContext('2d');
+
+  // ---------- 상태 ----------
+  let sourceImage = null;   // 줄여서 보관한 원본(canvas)
+  let tool = 'pen';
+  let color = DEFAULT_COLOR;
+  let size = DEFAULT_SIZE;  // 화면 픽셀 기준 굵기
+  let strokes = [];         // 최근 획(최대 MAX_UNDO)
+  let baseDirty = false;    // 오래된 획이 baseCanvas에 합쳐져 있는지
+  let cur = null;           // 지금 그리는 획
+  let activePointer = null;
+  let busy = false;
+
+  // ---------- 알림 ----------
+  const statusEl = $('status');
+  let toastTimer = 0;
+  function notify(msg, kind) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status show' + (kind ? ' ' + kind : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => statusEl.classList.remove('show'), 5000);
+  }
+
+  // ---------- 이미지 그리기 도우미 ----------
+  function drawContain(ctx, img, x, y, w, h) {
+    const s = Math.min(w / img.width, h / img.height);
+    const dw = img.width * s, dh = img.height * s;
+    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  }
+
+  function renderSource() {
+    srcCtx.fillStyle = '#fff';
+    srcCtx.fillRect(0, 0, SIZE, SIZE);
+    guideCtx.clearRect(0, 0, SIZE, SIZE);
+    if (!sourceImage) return;
+    srcCtx.imageSmoothingQuality = 'high';
+    guideCtx.imageSmoothingQuality = 'high';
+    drawContain(srcCtx, sourceImage, 0, 0, SIZE, SIZE);
+    drawContain(guideCtx, sourceImage, 0, 0, SIZE, SIZE);
+  }
+
+  // ---------- 획 그리기 ----------
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+  function applyStyle(ctx, s) {
+    ctx.globalCompositeOperation = s.erase ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = s.color;
+    ctx.fillStyle = s.color;
+    ctx.lineWidth = s.size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
+  // 새로 추가된 n번째 점까지 부드럽게 이어 그린다(n >= 1)
+  function stepStroke(ctx, s, n) {
+    const p = s.pts;
+    ctx.beginPath();
+    if (n === 1) {
+      const m = mid(p[0], p[1]);
+      ctx.moveTo(p[0].x, p[0].y);
+      ctx.lineTo(m.x, m.y);
+    } else {
+      const a = mid(p[n - 2], p[n - 1]);
+      const b = mid(p[n - 1], p[n]);
+      ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo(p[n - 1].x, p[n - 1].y, b.x, b.y);
+    }
+    ctx.stroke();
+  }
+  function finishStroke(ctx, s) {
+    const p = s.pts, L = p.length - 1;
+    if (L === 0) {
+      ctx.beginPath();
+      ctx.arc(p[0].x, p[0].y, s.size / 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    const m = mid(p[L - 1], p[L]);
+    ctx.beginPath();
+    ctx.moveTo(m.x, m.y);
+    ctx.lineTo(p[L].x, p[L].y);
+    ctx.stroke();
+  }
+  function replayStroke(ctx, s) {
+    ctx.save();
+    applyStyle(ctx, s);
+    for (let n = 1; n < s.pts.length; n++) stepStroke(ctx, s, n);
+    finishStroke(ctx, s);
+    ctx.restore();
+  }
+  function redraw() {
+    drawCtx.save();
+    drawCtx.globalCompositeOperation = 'source-over';
+    drawCtx.clearRect(0, 0, SIZE, SIZE);
+    drawCtx.drawImage(baseCanvas, 0, 0);
+    drawCtx.restore();
+    strokes.forEach((s) => replayStroke(drawCtx, s));
+  }
+  function clearDrawing() {
+    strokes = [];
+    baseDirty = false;
+    cur = null;
+    baseCtx.clearRect(0, 0, SIZE, SIZE);
+    redraw();
+    updateUndo();
+  }
+  const hasDrawing = () => strokes.length > 0 || baseDirty;
+
+  function commitStroke(s) {
+    strokes.push(s);
+    while (strokes.length > MAX_UNDO) {
+      replayStroke(baseCtx, strokes.shift());
+      baseDirty = true;
+    }
+    updateUndo();
+  }
+  function undo() {
+    if (cur || !strokes.length) return;
+    strokes.pop();
+    redraw();
+    updateUndo();
+  }
+  function updateUndo() { $('undoBtn').disabled = strokes.length === 0; }
+
+  // ---------- 포인터 입력 ----------
+  function toPoint(e, rect) {
+    return { x: (e.clientX - rect.left) * SIZE / rect.width, y: (e.clientY - rect.top) * SIZE / rect.height };
+  }
+  drawCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  drawCanvas.addEventListener('pointerdown', (e) => {
+    if (!e.isPrimary || cur) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    const rect = drawCanvas.getBoundingClientRect();
+    if (!rect.width) return;
+    try { drawCanvas.setPointerCapture(e.pointerId); } catch (_) { /* 무시 */ }
+    activePointer = e.pointerId;
+    cur = { color, erase: tool === 'erase', size: size * SIZE / rect.width, pts: [toPoint(e, rect)] };
+    drawCtx.save();
+    applyStyle(drawCtx, cur);
+    drawCtx.beginPath();
+    drawCtx.arc(cur.pts[0].x, cur.pts[0].y, cur.size / 2, 0, Math.PI * 2);
+    drawCtx.fill();
+  });
+  drawCanvas.addEventListener('pointermove', (e) => {
+    if (!cur || e.pointerId !== activePointer) return;
+    e.preventDefault();
+    const rect = drawCanvas.getBoundingClientRect();
+    const list = typeof e.getCoalescedEvents === 'function' && e.getCoalescedEvents().length ? e.getCoalescedEvents() : [e];
+    for (const ev of list) {
+      const pt = toPoint(ev, rect);
+      const last = cur.pts[cur.pts.length - 1];
+      if (Math.hypot(pt.x - last.x, pt.y - last.y) < 0.8) continue;
+      cur.pts.push(pt);
+      stepStroke(drawCtx, cur, cur.pts.length - 1);
+    }
+  });
+  function endStroke(e) {
+    if (!cur || e.pointerId !== activePointer) return;
+    finishStroke(drawCtx, cur);
+    drawCtx.restore();
+    const s = cur;
+    cur = null;
+    activePointer = null;
+    commitStroke(s);
+  }
+  drawCanvas.addEventListener('pointerup', endStroke);
+  drawCanvas.addEventListener('pointercancel', endStroke);
+
+  // ---------- 도구 UI ----------
+  function updatePreview() {
+    const dot = $('previewDot');
+    const d = Math.min(size, 34);
+    dot.style.width = dot.style.height = d + 'px';
+    if (tool === 'erase') {
+      dot.style.background = '#fff';
+      dot.style.border = '1.5px dashed #8a7a66';
+    } else {
+      dot.style.background = color;
+      dot.style.border = '0';
+    }
+  }
+  function updateSwatches() {
+    document.querySelectorAll('.swatch').forEach((b) => {
+      b.setAttribute('aria-pressed', String(tool === 'pen' && b.dataset.color === color));
+    });
+  }
+  function setTool(t) {
+    tool = t;
+    $('penBtn').setAttribute('aria-pressed', String(t === 'pen'));
+    $('eraserBtn').setAttribute('aria-pressed', String(t === 'erase'));
+    updateSwatches();
+    updatePreview();
+  }
+  function setColor(hex) {
+    color = hex.toLowerCase();
+    $('colorInput').value = color;
+    setTool('pen');
+  }
+
+  const swatchBox = $('swatches');
+  PALETTE.forEach(([name, hex]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'swatch';
+    b.style.background = hex;
+    b.dataset.color = hex;
+    b.title = name;
+    b.setAttribute('aria-label', name);
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => setColor(hex));
+    swatchBox.appendChild(b);
+  });
+  $('colorInput').addEventListener('input', (e) => setColor(e.target.value));
+  $('penBtn').addEventListener('click', () => setTool('pen'));
+  $('eraserBtn').addEventListener('click', () => setTool('erase'));
+  $('undoBtn').addEventListener('click', undo);
+  $('sizeRange').addEventListener('input', (e) => {
+    size = Number(e.target.value);
+    $('sizeVal').textContent = String(size);
+    updatePreview();
+  });
+
+  function updateGuide() {
+    const on = $('guideOn').checked;
+    const v = Number($('guideRange').value);
+    guideCanvas.style.display = on ? 'block' : 'none';
+    guideCanvas.style.opacity = String(v / 100);
+    $('guideRange').disabled = !on;
+    $('guideVal').textContent = '농도 ' + v + '%';
+  }
+  $('guideOn').addEventListener('change', updateGuide);
+  $('guideRange').addEventListener('input', updateGuide);
+
+  // ---------- 이미지 불러오기 ----------
+  const fileInput = $('fileInput');
+  $('pickBtn').addEventListener('click', () => fileInput.click());
+  $('changeBtn').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files && fileInput.files[0];
+    fileInput.value = '';
+    handleFile(f);
+  });
+
+  function isAllowed(file) {
+    const t = (file.type || '').toLowerCase();
+    if (t) return t === 'image/jpeg' || t === 'image/png' || t === 'image/jpg';
+    return /\.(jpe?g|png)$/i.test(file.name || '');
+  }
+  function decodeImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const w = img.naturalWidth, h = img.naturalHeight;
+          if (!w || !h) throw new Error('empty');
+          const k = Math.min(1, MAX_SRC / Math.max(w, h));
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(w * k));
+          c.height = Math.max(1, Math.round(h * k));
+          const x = c.getContext('2d');
+          x.imageSmoothingQuality = 'high';
+          x.drawImage(img, 0, 0, c.width, c.height);
+          resolve(c);
+        } catch (err) {
+          reject(err);
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+  async function handleFile(file) {
+    if (!file || busy) return;
+    if (!isAllowed(file)) {
+      notify('JPG, PNG 이미지만 불러올 수 있어요.', 'error');
+      return;
+    }
+    busy = true;
+    try {
+      let canvas;
+      try {
+        canvas = await decodeImage(file);
+      } catch (_) {
+        notify('이미지를 열 수 없어요. 다른 파일을 선택해 주세요.', 'error');
+        return;
+      }
+      if (hasDrawing() && !(await confirmReplace())) return;
+      applySource(canvas, file.name);
+    } finally {
+      busy = false;
+    }
+  }
+  function applySource(canvas, name) {
+    sourceImage = canvas;
+    clearDrawing();
+    renderSource();
+    $('srcEmpty').hidden = true;
+    $('changeBtn').hidden = false;
+    $('fileInfo').textContent = '불러온 파일: ' + name;
+    srcCanvas.setAttribute('aria-label', '불러온 원본 이미지: ' + name);
+  }
+
+  // 확인 창
+  const modal = $('modal'), mOk = $('modalOk'), mCancel = $('modalCancel');
+  function confirmReplace() {
+    return new Promise((resolve) => {
+      const prev = document.activeElement;
+      const close = (result) => {
+        modal.hidden = true;
+        mOk.removeEventListener('click', onOk);
+        mCancel.removeEventListener('click', onCancel);
+        modal.removeEventListener('keydown', onKey);
+        modal.removeEventListener('pointerdown', onBackdrop);
+        if (prev && prev.focus) prev.focus();
+        resolve(result);
+      };
+      const onOk = () => close(true);
+      const onCancel = () => close(false);
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); close(false); }
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          (document.activeElement === mOk ? mCancel : mOk).focus();
+        }
+      };
+      const onBackdrop = (e) => { if (e.target === modal) close(false); };
+      mOk.addEventListener('click', onOk);
+      mCancel.addEventListener('click', onCancel);
+      modal.addEventListener('keydown', onKey);
+      modal.addEventListener('pointerdown', onBackdrop);
+      modal.hidden = false;
+      mCancel.focus();
+    });
+  }
+
+  // 끌어다 놓기
+  const frame = $('srcFrame');
+  ['dragenter', 'dragover'].forEach((t) => frame.addEventListener(t, (e) => {
+    e.preventDefault();
+    frame.classList.add('drag');
+  }));
+  frame.addEventListener('dragleave', (e) => {
+    if (!frame.contains(e.relatedTarget)) frame.classList.remove('drag');
+  });
+  frame.addEventListener('drop', (e) => {
+    e.preventDefault();
+    frame.classList.remove('drag');
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    handleFile(f);
+  });
+  // 다른 곳에 놓아도 브라우저가 파일을 열어 버리지 않게 막는다
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => e.preventDefault());
+
+  // ---------- 저장 이미지 만들기 ----------
+  function mulberry32(a) {
+    return () => {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function roundRectPath(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+    g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r);
+    g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y);
+    g.closePath();
+  }
+  function paintPaper(g, W, H) {
+    const grad = g.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, '#f6ecd6');
+    grad.addColorStop(1, '#ecdcba');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, W, H);
+    const rnd = mulberry32(20261111);
+    for (let i = 0; i < 2600; i++) {
+      g.fillStyle = 'rgba(120,88,48,' + (0.04 + rnd() * 0.09).toFixed(3) + ')';
+      g.beginPath();
+      g.arc(rnd() * W, rnd() * H, 0.5 + rnd() * 1.4, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.lineWidth = 1;
+    for (let i = 0; i < 260; i++) {
+      const x = rnd() * W, y = rnd() * H, a = rnd() * Math.PI, l = 6 + rnd() * 16;
+      g.strokeStyle = 'rgba(140,105,60,' + (0.04 + rnd() * 0.06).toFixed(3) + ')';
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+      g.stroke();
+    }
+    const v = g.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.78);
+    v.addColorStop(0, 'rgba(110,80,40,0)');
+    v.addColorStop(1, 'rgba(110,80,40,0.28)');
+    g.fillStyle = v;
+    g.fillRect(0, 0, W, H);
+    g.save();
+    g.setLineDash([3, 12]);
+    g.lineCap = 'round';
+    g.lineWidth = 3;
+    g.strokeStyle = 'rgba(150,108,70,0.5)';
+    roundRectPath(g, 26, 26, W - 52, H - 52, 22);
+    g.stroke();
+    g.restore();
+  }
+  function paintTape(g, cx, cy, w, h, ang, fill) {
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(ang);
+    g.shadowColor = 'rgba(60,40,20,0.2)';
+    g.shadowBlur = 4;
+    g.shadowOffsetY = 1.5;
+    g.fillStyle = fill;
+    g.beginPath();
+    const n = Math.max(2, Math.round(h / 8));
+    g.moveTo(-w / 2, -h / 2);
+    g.lineTo(w / 2, -h / 2);
+    for (let i = 0; i < n; i++) {
+      g.lineTo(w / 2 + 5, -h / 2 + (i + 0.5) * h / n);
+      g.lineTo(w / 2, -h / 2 + (i + 1) * h / n);
+    }
+    g.lineTo(-w / 2, h / 2);
+    for (let i = n - 1; i >= 0; i--) {
+      g.lineTo(-w / 2 - 5, -h / 2 + (i + 0.5) * h / n);
+      g.lineTo(-w / 2, -h / 2 + i * h / n);
+    }
+    g.closePath();
+    g.fill();
+    g.shadowColor = 'transparent';
+    g.fillStyle = 'rgba(255,255,255,0.22)';
+    g.fillRect(-w / 2, -h / 2, w, h * 0.32);
+    g.restore();
+  }
+  function paintStar(g, x, y, r, fill, rot) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(rot || 0);
+    g.fillStyle = fill;
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const rr = i % 2 ? r * 0.45 : r;
+      const a = -Math.PI / 2 + i * Math.PI / 5;
+      g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    g.closePath();
+    g.fill();
+    g.restore();
+  }
+  function paintHeart(g, x, y, s, fill, rot) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(rot || 0);
+    g.fillStyle = fill;
+    g.beginPath();
+    g.moveTo(0, s * 0.45);
+    g.bezierCurveTo(-s * 1.15, -s * 0.3, -s * 0.5, -s * 1.0, 0, -s * 0.38);
+    g.bezierCurveTo(s * 0.5, -s * 1.0, s * 1.15, -s * 0.3, 0, s * 0.45);
+    g.fill();
+    g.restore();
+  }
+  function wrapChars(g, text, maxW) {
+    const lines = [];
+    let line = '';
+    for (const ch of Array.from(text)) {
+      if (line && g.measureText(line + ch).width > maxW) { lines.push(line); line = ch; } else { line += ch; }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function layoutTitle(g, text, maxW) {
+    for (let s = 84; s >= 52; s -= 4) {
+      g.font = '700 ' + s + 'px ' + FONT_STACK;
+      if (g.measureText(text).width <= maxW) return { size: s, lines: [text] };
+    }
+    let lines = [], s;
+    for (s = 64; s >= 34; s -= 4) {
+      g.font = '700 ' + s + 'px ' + FONT_STACK;
+      lines = wrapChars(g, text, maxW);
+      if (lines.length <= 2) return { size: s, lines };
+    }
+    s = 34;
+    g.font = '700 ' + s + 'px ' + FONT_STACK;
+    lines = wrapChars(g, text, maxW).slice(0, 2);
+    let last = lines[1];
+    while (last.length > 1 && g.measureText(last + '…').width > maxW) last = last.slice(0, -1);
+    lines[1] = last + '…';
+    return { size: s, lines };
+  }
+  function paintPolaroid(g, cx, cy, ang, paintPhoto, label, tapeFill, tapeAng) {
+    const CW = 500, CH = 590, PX = -220, PY = -265, PS = 440;
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(ang);
+    g.shadowColor = 'rgba(60,40,20,0.38)';
+    g.shadowBlur = 30;
+    g.shadowOffsetY = 14;
+    g.fillStyle = '#fffdf7';
+    g.fillRect(-CW / 2, -CH / 2, CW, CH);
+    g.shadowColor = 'transparent';
+    g.strokeStyle = 'rgba(120,90,50,0.18)';
+    g.lineWidth = 2;
+    g.strokeRect(-CW / 2, -CH / 2, CW, CH);
+    g.save();
+    g.beginPath();
+    g.rect(PX, PY, PS, PS);
+    g.clip();
+    paintPhoto(g, PX, PY, PS);
+    const gloss = g.createLinearGradient(PX, PY, PX + PS, PY + PS);
+    gloss.addColorStop(0, 'rgba(255,255,255,0.14)');
+    gloss.addColorStop(0.5, 'rgba(255,255,255,0)');
+    g.fillStyle = gloss;
+    g.fillRect(PX, PY, PS, PS);
+    g.restore();
+    g.strokeStyle = 'rgba(0,0,0,0.12)';
+    g.lineWidth = 2;
+    g.strokeRect(PX, PY, PS, PS);
+    g.fillStyle = '#6b5640';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = '700 40px ' + FONT_STACK;
+    g.fillText(label, 0, PY + PS + 62);
+    paintTape(g, 0, -CH / 2 + 4, 170, 52, tapeAng, tapeFill);
+    g.restore();
+  }
+  function paintStamp(g, cx, cy, dateText) {
+    const w = 480, h = 120, ink = 'rgba(176,64,52,0.88)';
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(-0.05);
+    g.strokeStyle = ink;
+    g.lineWidth = 5;
+    roundRectPath(g, -w / 2, -h / 2, w, h, 16);
+    g.stroke();
+    g.lineWidth = 2;
+    roundRectPath(g, -w / 2 + 9, -h / 2 + 9, w - 18, h - 18, 10);
+    g.stroke();
+    g.fillStyle = ink;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    if ('letterSpacing' in g) g.letterSpacing = '4px';
+    g.font = '700 26px ' + FONT_STACK;
+    g.fillText(APP_NAME, 0, -22);
+    if ('letterSpacing' in g) g.letterSpacing = '2px';
+    g.font = '800 46px ' + FONT_STACK;
+    g.fillText(dateText, 0, 24);
+    g.restore();
+  }
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+  function effectiveTitle() {
+    const t = $('titleInput').value.replace(/\s+/g, ' ').trim();
+    return t || DEFAULT_TITLE;
+  }
+  function makeFileName(title, d) {
+    let t = title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim();
+    t = Array.from(t).slice(0, 40).join('').replace(/[. ]+$/, '');
+    if (!t) t = DEFAULT_TITLE;
+    const stamp = d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '-' +
+      pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
+    return t + '_' + stamp + '.png';
+  }
+  function composeImage(title, d) {
+    const W = 1080, H = 1350;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    paintPaper(g, W, H);
+
+    // 위쪽: 제목과 꾸밈
+    paintTape(g, W / 2, 92, 300, 62, -0.04, 'rgba(236,170,128,0.88)');
+    g.fillStyle = '#4b3a2a';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    const t = layoutTitle(g, title, 760);
+    const lh = t.size * 1.18;
+    const top = 215 - (lh * (t.lines.length - 1)) / 2;
+    t.lines.forEach((ln, i) => g.fillText(ln, W / 2, top + i * lh));
+    const wy = 215 + (lh * (t.lines.length - 1)) / 2 + t.size * 0.5 + 24;
+    g.save();
+    g.strokeStyle = 'rgba(201,96,74,0.85)';
+    g.lineWidth = 5;
+    g.lineCap = 'round';
+    g.beginPath();
+    for (let x = -170; x <= 170; x += 4) {
+      const px = W / 2 + x, py = wy + Math.sin(x / 14) * 6;
+      if (x === -170) g.moveTo(px, py); else g.lineTo(px, py);
+    }
+    g.stroke();
+    g.restore();
+    paintStar(g, 96, 128, 30, '#e8b64a', 0.2);
+    paintHeart(g, 984, 168, 26, '#e07a8a', 0.25);
+    paintHeart(g, 84, 300, 17, '#e9a0a8', -0.3);
+    paintStar(g, 1002, 316, 20, '#f0cc72', -0.2);
+    paintStar(g, 170, 372, 13, '#d99a52', 0.4);
+    paintHeart(g, 912, 392, 14, '#d9808c', -0.2);
+
+    // 가운데: 폴라로이드 두 장
+    paintPolaroid(g, 290, 800, -0.07, (gg, x, y, s) => {
+      gg.fillStyle = '#fff';
+      gg.fillRect(x, y, s, s);
+      if (sourceImage) drawContain(gg, sourceImage, x, y, s, s);
+    }, '원본', 'rgba(244,196,120,0.88)', -0.12);
+    paintPolaroid(g, 790, 835, 0.06, (gg, x, y, s) => {
+      gg.fillStyle = '#fff';
+      gg.fillRect(x, y, s, s);
+      gg.drawImage(drawCanvas, x, y, s, s);
+    }, '내 그림', 'rgba(150,204,190,0.88)', 0.1);
+
+    // 아래쪽: 앱 이름과 날짜 도장
+    paintStamp(g, W / 2, 1238, d.getFullYear() + '. ' + (d.getMonth() + 1) + '. ' + d.getDate() + '.');
+    return c;
+  }
+
+  $('saveBtn').addEventListener('click', () => {
+    if (!sourceImage) {
+      notify('먼저 따라 그릴 이미지를 불러오세요.', 'error');
+      return;
+    }
+    if (cur) return;
+    const now = new Date();
+    const title = effectiveTitle();
+    const name = makeFileName(title, now);
+    let canvas;
+    try {
+      canvas = composeImage(title, now);
+    } catch (err) {
+      notify('저장 이미지를 만들지 못했어요. 다시 시도해 주세요.', 'error');
+      return;
+    }
+    canvas.toBlob((blob) => {
+      if (!blob) { notify('저장하지 못했어요. 다시 시도해 주세요.', 'error'); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+      notify('저장했어요: ' + name);
+    }, 'image/png');
+  });
+
+  // ---------- 시작 ----------
+  renderSource();
+  redraw();
+  updateGuide();
+  updatePreview();
+  updateSwatches();
+  updateUndo();
+})();
+</script>
+</body>
+</html>
